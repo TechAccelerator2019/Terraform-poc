@@ -46,6 +46,11 @@ func initCommands(config *Config, services *disco.Disco) {
 		services.ForceHostServices(host, hostConfig.Services)
 	}
 
+	configDir, err := ConfigDir()
+	if err != nil {
+		configDir = "" // No config dir available (e.g. looking up a home directory failed)
+	}
+
 	dataDir := os.Getenv("TF_DATA_DIR")
 
 	meta := command.Meta{
@@ -57,6 +62,7 @@ func initCommands(config *Config, services *disco.Disco) {
 		Services: services,
 
 		RunningInAutomation: inAutomation,
+		CLIConfigDir:        configDir,
 		PluginCacheDir:      config.PluginCacheDir,
 		OverrideDataDir:     dataDir,
 
@@ -164,6 +170,12 @@ func initCommands(config *Config, services *disco.Disco) {
 
 		"internal-plugin": func() (cli.Command, error) {
 			return &command.InternalPluginCommand{
+				Meta: meta,
+			}, nil
+		},
+
+		"login": func() (cli.Command, error) {
+			return &command.LoginCommand{
 				Meta: meta,
 			}, nil
 		},
