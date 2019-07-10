@@ -111,13 +111,6 @@ func decodeResourceBlock(block *hcl.Block) (*Resource, hcl.Diagnostics) {
 
 	if attr, exists := content.Attributes["for_each"]; exists {
 		r.ForEach = attr.Expr
-		// We currently parse this, but don't yet do anything with it.
-		diags = append(diags, &hcl.Diagnostic{
-			Severity: hcl.DiagError,
-			Summary:  "Reserved argument name in resource block",
-			Detail:   fmt.Sprintf("The name %q is reserved for use in a future version of Terraform.", attr.Name),
-			Subject:  &attr.NameRange,
-		})
 	}
 
 	if attr, exists := content.Attributes["provider"]; exists {
