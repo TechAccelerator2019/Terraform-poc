@@ -1,0 +1,4 @@
+host "example.com" {
+  # HCL 2 does not allow arguments to be quoted
+  "services" = {}
+}
