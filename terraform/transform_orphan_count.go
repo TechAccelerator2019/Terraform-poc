@@ -50,6 +50,8 @@ func (t *OrphanResourceCountTransformer) Transform(g *Graph) error {
 }
 
 func (t *OrphanResourceCountTransformer) transformForEach(haveKeys map[addrs.InstanceKey]struct{}, g *Graph) error {
+	var noKeyNode dag.Vertex
+
 	for key := range haveKeys {
 		s, _ := key.(addrs.StringKey)
 		// If the key is present in our current for_each, carry on
@@ -63,8 +65,31 @@ func (t *OrphanResourceCountTransformer) transformForEach(haveKeys map[addrs.Ins
 			node = f(abstract)
 		}
 		log.Printf("[TRACE] OrphanResourceCount(non-zero): adding %s as %T", t.Addr, node)
+
+		if key == addrs.NoKey {
+			noKeyNode = node
+		}
+
 		g.Add(node)
 	}
+
+	// Make sure foreach orphan is always refreshed first.
+	// This is because once the to-be-created instances are evaluated, the
+	// in-memory state needs to have the EachMode registered as "map". If the
+	// single instance is refreshed last, config references to the ForEach
+	// instances will fail because the EachMode was revered to none.
+	if noKeyNode != nil {
+		for _, v := range g.Vertices() {
+			r, ok := v.(GraphNodeResourceInstance)
+			if !ok {
+				continue
+			}
+			if r.ResourceInstanceAddr().Resource.Key != addrs.NoKey {
+				g.Connect(dag.BasicEdge(v, noKeyNode))
+			}
+		}
+	}
+
 	return nil
 }
 
