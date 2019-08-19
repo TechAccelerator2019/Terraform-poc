@@ -1,23 +1,35 @@
 ---
 layout: "docs"
-page_title: "Provisioner Connections"
+page_title: "Provisioner Connection Settings"
 sidebar_current: "docs-provisioners-connection"
 description: |-
   Managing connection defaults for SSH and WinRM using the `connection` block.
 ---
 
-# Provisioner Connections
+# Provisioner Connection Settings
 
 Many provisioners require access to the remote resource. For example,
 a provisioner may need to use SSH or WinRM to connect to the resource.
 
-Terraform uses a number of defaults when connecting to a resource, but these can
-be overridden using a `connection` block in either a `resource` or
-`provisioner`. Any `connection` information provided in a `resource` will apply
-to all the provisioners, but it can be scoped to a single provisioner as well.
-One use case is to have an initial provisioner connect as the `root` user to
-setup user accounts, and have subsequent provisioners connect as a user with
-more limited permissions.
+Any provisioner that takes actions on a remote resource needs details about how
+to connect to it. You can provide these details in a nested `connection` block.
+
+-> **Note:** In Terraform 0.11 and earlier, providers could set default values
+for some connection settings, so that `connection` blocks could sometimes be
+omitted. This feature was removed in 0.12 in order to reduce confusion and make
+configurations more readable and predictable.
+
+Connection blocks don't take a block label, and can be nested within either a
+`resource` or a `provisioner`.
+
+- A `connection` block nested directly within a `resource` affects all of
+  that resource's provisioners.
+- A `connection` block nested in a `provisioner` block only affects that
+  provisioner, and overrides any resource-level connection settings.
+
+One use case for providing multiple connections is to have an initial
+provisioner connect as the `root` user to set up user accounts, and have
+subsequent provisioners connect as a user with more limited permissions.
 
 ## Example usage
 
@@ -46,6 +58,21 @@ provisioner "file" {
   }
 }
 ```
+
+## The `self` Object
+
+Expressions in `connection` blocks cannot refer to their parent resource by
+name. To work around this, an additional `self` object is available within
+`connection` blocks.
+
+The `self` object represents the connection's parent resource, and any of that
+resource's attributes can be accessed as attributes of `self`. For example, an
+`aws_instance` resource's `public_ip` attribute can be referenced as
+`self.public_ip` within its connection configuration.
+
+-> **Technical note:** Resource references are restricted here because Terraform
+uses those references to create dependencies. Referring to a resource by name
+within its own block would create a dependency cycle.
 
 ## Argument Reference
 
