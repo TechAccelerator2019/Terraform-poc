@@ -120,6 +120,7 @@ service Provider {
     rpc PrepareProviderConfig(PrepareProviderConfig.Request) returns (PrepareProviderConfig.Response);
     rpc ValidateResourceTypeConfig(ValidateResourceTypeConfig.Request) returns (ValidateResourceTypeConfig.Response);
     rpc ValidateDataSourceConfig(ValidateDataSourceConfig.Request) returns (ValidateDataSourceConfig.Response);
+    rpc ValidateProvisionerConfig(ValidateProvisionerConfig.Request) returns (ValidateProvisionerConfig.Response);
     rpc UpgradeResourceState(UpgradeResourceState.Request) returns (UpgradeResourceState.Response);
 
     //////// One-time initialization, called before other functions below
@@ -144,6 +145,7 @@ message GetProviderSchema {
         Schema provider = 1;
         map<string, Schema> resource_schemas = 2;
         map<string, Schema> data_source_schemas = 3;
+        map<string, Schema> provisioner_schemas = 5;
         repeated Diagnostic diagnostics = 4;
     }
 }
@@ -335,6 +337,7 @@ message GetProvisionerSchema {
 message ValidateProvisionerConfig {
     message Request {
         DynamicValue config = 1;
+        string type_name = 2;
     }
     message Response {
         repeated Diagnostic diagnostics = 1;

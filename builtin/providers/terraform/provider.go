@@ -138,3 +138,8 @@ func (p *Provider) ValidateResourceTypeConfig(providers.ValidateResourceTypeConf
 func (p *Provider) Close() error {
 	return nil
 }
+
+func (p *Provider) ValidateProvisionerConfig(providers.ValidateProvisionerConfigRequest) providers.ValidateProvisionerConfigResponse {
+	var res providers.ValidateProvisionerConfigResponse
+	return res
+}

@@ -50,6 +50,9 @@ type Provider struct {
 	// and must *not* implement Create, Update or Delete.
 	DataSourcesMap map[string]*Resource
 
+	// what is the least amount of effort required to move provisioners into providers?
+	ProvisionersMap map[string]*Provisioner
+
 	// ConfigureFunc is a function for configuring the provider. If the
 	// provider doesn't need to be configured, this can be omitted.
 	//
@@ -113,6 +116,12 @@ func (p *Provider) InternalValidate() error {
 	for k, r := range p.DataSourcesMap {
 		if err := r.InternalValidate(nil, false); err != nil {
 			validationErrors = multierror.Append(validationErrors, fmt.Errorf("data source %s: %s", k, err))
+		}
+	}
+
+	for k, r := range p.ProvisionersMap {
+		if err := r.InternalValidate(); err != nil {
+			validationErrors = multierror.Append(validationErrors, fmt.Errorf("provisioner %s: %s", k, err))
 		}
 	}
 
@@ -196,6 +205,7 @@ func (p *Provider) TestReset() error {
 func (p *Provider) GetSchema(req *terraform.ProviderSchemaRequest) (*terraform.ProviderSchema, error) {
 	resourceTypes := map[string]*configschema.Block{}
 	dataSources := map[string]*configschema.Block{}
+	provisioners := map[string]*configschema.Block{}
 
 	for _, name := range req.ResourceTypes {
 		if r, exists := p.ResourcesMap[name]; exists {
@@ -207,11 +217,17 @@ func (p *Provider) GetSchema(req *terraform.ProviderSchemaRequest) (*terraform.P
 			dataSources[name] = r.CoreConfigSchema()
 		}
 	}
+	for _, name := range req.Provisioners {
+		if r, exists := p.ProvisionersMap[name]; exists {
+			provisioners[name] = r.CoreConfigSchema()
+		}
+	}
 
 	return &terraform.ProviderSchema{
 		Provider:      schemaMap(p.Schema).CoreConfigSchema(),
 		ResourceTypes: resourceTypes,
 		DataSources:   dataSources,
+		Provisioners:  provisioners,
 	}, nil
 }
 
@@ -466,4 +482,16 @@ func (p *Provider) DataSources() []terraform.DataSource {
 	}
 
 	return result
+}
+
+// ValidateProvisioner implementation of terraform.ResourceProvider interface.
+func (p *Provider) ValidateProvisioner(
+	t string, c *terraform.ResourceConfig) ([]string, []error) {
+	pr, ok := p.ProvisionersMap[t]
+	if !ok {
+		return nil, []error{fmt.Errorf(
+			"Provider doesn't support resource: %s", t)}
+	}
+
+	return pr.Validate(c)
 }

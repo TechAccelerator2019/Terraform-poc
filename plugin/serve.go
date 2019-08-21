@@ -66,14 +66,14 @@ func Serve(opts *ServeOpts) {
 			}
 		}
 	}
-	if opts.GRPCProvisionerFunc == nil && opts.ProvisionerFunc != nil {
-		provisioner := grpcplugin.NewGRPCProvisionerServerShim(opts.ProvisionerFunc())
-		if provisioner != nil {
-			opts.GRPCProvisionerFunc = func() proto.ProvisionerServer {
-				return provisioner
-			}
-		}
-	}
+	// if opts.GRPCProvisionerFunc == nil && opts.ProvisionerFunc != nil {
+	// 	provisioner := grpcplugin.NewGRPCProvisionerServerShim(opts.ProvisionerFunc())
+	// 	if provisioner != nil {
+	// 		opts.GRPCProvisionerFunc = func() proto.ProvisionerServer {
+	// 			return provisioner
+	// 		}
+	// 	}
+	// }
 
 	plugin.Serve(&plugin.ServeConfig{
 		HandshakeConfig:  Handshake,

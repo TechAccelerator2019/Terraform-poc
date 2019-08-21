@@ -26,6 +26,10 @@ type Interface interface {
 	// configuration values.
 	ValidateDataSourceConfig(ValidateDataSourceConfigRequest) ValidateDataSourceConfigResponse
 
+	// ValidateProvisioner allows the provider to validate the data source
+	// configuration values.
+	ValidateProvisionerConfig(ValidateProvisionerConfigRequest) ValidateProvisionerConfigResponse
+
 	// UpgradeResourceState is called when the state loader encounters an
 	// instance state whose schema version is less than the one reported by the
 	// currently-used version of the corresponding provider, and the upgraded
@@ -79,6 +83,9 @@ type GetSchemaResponse struct {
 	// DataSources maps the data source name to that data source's schema.
 	DataSources map[string]Schema
 
+	// Provisioners maps the provisioner name to that preovisioner's schema.
+	Provisioners map[string]Schema
+
 	// Diagnostics contains any warnings or errors from the method call.
 	Diagnostics tfdiags.Diagnostics
 }
@@ -128,6 +135,20 @@ type ValidateDataSourceConfigRequest struct {
 type ValidateDataSourceConfigResponse struct {
 	// Diagnostics contains any warnings or errors from the method call.
 	Diagnostics tfdiags.Diagnostics
+}
+
+type ValidateProvisionerConfigResponse struct {
+	// Diagnostics contains any warnings or errors from the method call.
+	Diagnostics tfdiags.Diagnostics
+}
+
+type ValidateProvisionerConfigRequest struct {
+	// TypeName is the name of the provisioner type to validate.
+	TypeName string
+
+	// Config is the configuration value to validate, which may contain unknown
+	// values.
+	Config cty.Value
 }
 
 type UpgradeResourceStateRequest struct {

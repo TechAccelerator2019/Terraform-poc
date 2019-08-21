@@ -34,7 +34,8 @@ type Provisioner struct {
 	//
 	// The keys of this map are the configuration keys, and the value is
 	// the schema describing the value of the configuration.
-	Schema map[string]*Schema
+	Schema        map[string]*Schema
+	SchemaVersion int
 
 	// ApplyFunc is the function for executing the provisioner. This is required.
 	// It is given a context. See the Provisioner struct docs for more

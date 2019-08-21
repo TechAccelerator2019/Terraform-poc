@@ -3,6 +3,7 @@ package terraform
 import (
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/hashicorp/terraform/addrs"
 	"github.com/hashicorp/terraform/configs"
@@ -41,6 +42,17 @@ func (ss *Schemas) ProviderConfig(typeName string) *configschema.Block {
 	return ps.Provider
 }
 
+// ProviderConfig returns the schema for the provider configuration of the
+// given provider type, or nil if no such schema is available.
+func (ss *Schemas) ProvisionerConfig(name string) *configschema.Block {
+	parts := strings.Split(name, "-")
+	ps := ss.ProviderSchema(parts[0])
+	if ps == nil {
+		return nil
+	}
+	return ps.Provisioners[name]
+}
+
 // ResourceTypeConfig returns the schema for the configuration of a given
 // resource type belonging to a given provider type, or nil of no such
 // schema is available.
@@ -56,12 +68,6 @@ func (ss *Schemas) ResourceTypeConfig(providerType string, resourceMode addrs.Re
 		return nil, 0
 	}
 	return ps.SchemaForResourceType(resourceMode, resourceType)
-}
-
-// ProvisionerConfig returns the schema for the configuration of a given
-// provisioner, or nil of no such schema is available.
-func (ss *Schemas) ProvisionerConfig(name string) *configschema.Block {
-	return ss.Provisioners[name]
 }
 
 // LoadSchemas searches the given configuration, state  and plan (any of which
@@ -83,8 +89,11 @@ func LoadSchemas(config *configs.Config, state *states.State, components context
 
 	newDiags := loadProviderSchemas(schemas.Providers, config, state, components)
 	diags = diags.Append(newDiags)
-	newDiags = loadProvisionerSchemas(schemas.Provisioners, config, components)
-	diags = diags.Append(newDiags)
+	for _, provider := range schemas.Providers {
+		for n, provisioner := range provider.Provisioners {
+			schemas.Provisioners[n] = provisioner
+		}
+	}
 
 	return schemas, diags.Err()
 }
@@ -127,6 +136,7 @@ func loadProviderSchemas(schemas map[string]*ProviderSchema, config *configs.Con
 			Provider:      resp.Provider.Block,
 			ResourceTypes: make(map[string]*configschema.Block),
 			DataSources:   make(map[string]*configschema.Block),
+			Provisioners:  make(map[string]*configschema.Block),
 
 			ResourceTypeSchemaVersions: make(map[string]uint64),
 		}
@@ -160,6 +170,17 @@ func loadProviderSchemas(schemas map[string]*ProviderSchema, config *configs.Con
 			}
 		}
 
+		for t, p := range resp.Provisioners {
+			s.Provisioners[t] = p.Block
+			if p.Version < 0 {
+				// We're not using the version numbers here yet, but we'll check
+				// for validity anyway in case we start using them in future.
+				diags = diags.Append(
+					fmt.Errorf("invalid negative schema version for provisioner %s in provider %q", t, typeName),
+				)
+			}
+		}
+
 		schemas[typeName] = s
 	}
 
@@ -179,61 +200,61 @@ func loadProviderSchemas(schemas map[string]*ProviderSchema, config *configs.Con
 	return diags
 }
 
-func loadProvisionerSchemas(schemas map[string]*configschema.Block, config *configs.Config, components contextComponentFactory) tfdiags.Diagnostics {
-	var diags tfdiags.Diagnostics
+// func loadProvisionerSchemas(schemas map[string]*configschema.Block, config *configs.Config, components contextComponentFactory) tfdiags.Diagnostics {
+// 	var diags tfdiags.Diagnostics
 
-	ensure := func(name string) {
-		if _, exists := schemas[name]; exists {
-			return
-		}
+// 	ensure := func(name string) {
+// 		if _, exists := schemas[name]; exists {
+// 			return
+// 		}
 
-		log.Printf("[TRACE] LoadSchemas: retrieving schema for provisioner %q", name)
-		provisioner, err := components.ResourceProvisioner(name, "early/"+name)
-		if err != nil {
-			// We'll put a stub in the map so we won't re-attempt this on
-			// future calls.
-			schemas[name] = &configschema.Block{}
-			diags = diags.Append(
-				fmt.Errorf("Failed to instantiate provisioner %q to obtain schema: %s", name, err),
-			)
-			return
-		}
-		defer func() {
-			if closer, ok := provisioner.(ResourceProvisionerCloser); ok {
-				closer.Close()
-			}
-		}()
+// 		log.Printf("[TRACE] LoadSchemas: retrieving schema for provisioner %q", name)
+// 		provisioner, err := components.ResourceProvisioner(name, "early/"+name)
+// 		if err != nil {
+// 			// We'll put a stub in the map so we won't re-attempt this on
+// 			// future calls.
+// 			schemas[name] = &configschema.Block{}
+// 			diags = diags.Append(
+// 				fmt.Errorf("Failed to instantiate provisioner %q to obtain schema: %s", name, err),
+// 			)
+// 			return
+// 		}
+// 		defer func() {
+// 			if closer, ok := provisioner.(ResourceProvisionerCloser); ok {
+// 				closer.Close()
+// 			}
+// 		}()
 
-		resp := provisioner.GetSchema()
-		if resp.Diagnostics.HasErrors() {
-			// We'll put a stub in the map so we won't re-attempt this on
-			// future calls.
-			schemas[name] = &configschema.Block{}
-			diags = diags.Append(
-				fmt.Errorf("Failed to retrieve schema from provisioner %q: %s", name, resp.Diagnostics.Err()),
-			)
-			return
-		}
+// 		resp := provisioner.GetSchema()
+// 		if resp.Diagnostics.HasErrors() {
+// 			// We'll put a stub in the map so we won't re-attempt this on
+// 			// future calls.
+// 			schemas[name] = &configschema.Block{}
+// 			diags = diags.Append(
+// 				fmt.Errorf("Failed to retrieve schema from provisioner %q: %s", name, resp.Diagnostics.Err()),
+// 			)
+// 			return
+// 		}
 
-		schemas[name] = resp.Provisioner
-	}
+// 		schemas[name] = resp.Provisioner
+// 	}
 
-	if config != nil {
-		for _, rc := range config.Module.ManagedResources {
-			for _, pc := range rc.Managed.Provisioners {
-				ensure(pc.Type)
-			}
-		}
+// 	if config != nil {
+// 		for _, rc := range config.Module.ManagedResources {
+// 			for _, pc := range rc.Managed.Provisioners {
+// 				ensure(pc.Type)
+// 			}
+// 		}
 
-		// Must also visit our child modules, recursively.
-		for _, cc := range config.Children {
-			childDiags := loadProvisionerSchemas(schemas, cc, components)
-			diags = diags.Append(childDiags)
-		}
-	}
+// 		// Must also visit our child modules, recursively.
+// 		for _, cc := range config.Children {
+// 			childDiags := loadProvisionerSchemas(schemas, cc, components)
+// 			diags = diags.Append(childDiags)
+// 		}
+// 	}
 
-	return diags
-}
+// 	return diags
+// }
 
 // ProviderSchema represents the schema for a provider's own configuration
 // and the configuration for some or all of its resources and data sources.
@@ -245,6 +266,7 @@ type ProviderSchema struct {
 	Provider      *configschema.Block
 	ResourceTypes map[string]*configschema.Block
 	DataSources   map[string]*configschema.Block
+	Provisioners  map[string]*configschema.Block
 
 	ResourceTypeSchemaVersions map[string]uint64
 }
@@ -270,9 +292,16 @@ func (ps *ProviderSchema) SchemaForResourceAddr(addr addrs.Resource) (schema *co
 	return ps.SchemaForResourceType(addr.Mode, addr.Type)
 }
 
+// SchemaForResourceAddr attempts to find a schema for the mode and type from
+// the given resource address. Returns nil if no such schema is available.
+func (ps *ProviderSchema) SchemaForProvisioner(typeName string) (schema *configschema.Block, version uint64) {
+	return ps.Provisioners[typeName], 0
+}
+
 // ProviderSchemaRequest is used to describe to a ResourceProvider which
 // aspects of schema are required, when calling the GetSchema method.
 type ProviderSchemaRequest struct {
 	ResourceTypes []string
 	DataSources   []string
+	Provisioners  []string
 }

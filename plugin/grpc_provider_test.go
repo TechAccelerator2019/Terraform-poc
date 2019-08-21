@@ -80,6 +80,20 @@ func providerProtoSchema() *proto.GetProviderSchema_Response {
 				},
 			},
 		},
+		ProvisionerSchemas: map[string]*proto.Schema{
+			"provisioner": &proto.Schema{
+				Version: 1,
+				Block: &proto.Schema_Block{
+					Attributes: []*proto.Schema_Attribute{
+						{
+							Name:     "attr",
+							Type:     []byte(`"string"`),
+							Required: true,
+						},
+					},
+				},
+			},
+		},
 	}
 }
 

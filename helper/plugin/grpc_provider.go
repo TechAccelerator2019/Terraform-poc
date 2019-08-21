@@ -47,8 +47,9 @@ func (s *GRPCProviderServer) GetSchema(_ context.Context, req *proto.GetProvider
 	schema.SetProto5()
 
 	resp := &proto.GetProviderSchema_Response{
-		ResourceSchemas:   make(map[string]*proto.Schema),
-		DataSourceSchemas: make(map[string]*proto.Schema),
+		ResourceSchemas:    make(map[string]*proto.Schema),
+		DataSourceSchemas:  make(map[string]*proto.Schema),
+		ProvisionerSchemas: make(map[string]*proto.Schema),
 	}
 
 	resp.Provider = &proto.Schema{
@@ -69,6 +70,13 @@ func (s *GRPCProviderServer) GetSchema(_ context.Context, req *proto.GetProvider
 		}
 	}
 
+	for typ, pro := range s.provider.ProvisionersMap {
+		resp.ProvisionerSchemas[typ] = &proto.Schema{
+			Version: int64(pro.SchemaVersion),
+			Block:   convert.ConfigSchemaToProto(pro.CoreConfigSchema()),
+		}
+	}
+
 	return resp, nil
 }
 
@@ -84,6 +92,11 @@ func (s *GRPCProviderServer) getResourceSchemaBlock(name string) *configschema.B
 func (s *GRPCProviderServer) getDatasourceSchemaBlock(name string) *configschema.Block {
 	dat := s.provider.DataSourcesMap[name]
 	return dat.CoreConfigSchema()
+}
+
+func (s *GRPCProviderServer) getProvisionerSchemaBlock(name string) *configschema.Block {
+	pro := s.provider.ProvisionersMap[name]
+	return pro.CoreConfigSchema()
 }
 
 func (s *GRPCProviderServer) PrepareProviderConfig(_ context.Context, req *proto.PrepareProviderConfig_Request) (*proto.PrepareProviderConfig_Response, error) {
@@ -229,6 +242,25 @@ func (s *GRPCProviderServer) ValidateDataSourceConfig(_ context.Context, req *pr
 	config := terraform.NewResourceConfigShimmed(configVal, schemaBlock)
 
 	warns, errs := s.provider.ValidateDataSource(req.TypeName, config)
+	resp.Diagnostics = convert.AppendProtoDiag(resp.Diagnostics, convert.WarnsAndErrsToProto(warns, errs))
+
+	return resp, nil
+}
+
+func (s *GRPCProviderServer) ValidateProvisionerConfig(_ context.Context, req *proto.ValidateProvisionerConfig_Request) (*proto.ValidateProvisionerConfig_Response, error) {
+	resp := &proto.ValidateProvisionerConfig_Response{}
+
+	schemaBlock := s.getProvisionerSchemaBlock(req.TypeName)
+
+	configVal, err := msgpack.Unmarshal(req.Config.Msgpack, schemaBlock.ImpliedType())
+	if err != nil {
+		resp.Diagnostics = convert.AppendProtoDiag(resp.Diagnostics, err)
+		return resp, nil
+	}
+
+	config := terraform.NewResourceConfigShimmed(configVal, schemaBlock)
+
+	warns, errs := s.provider.ValidateProvisioner(req.TypeName, config)
 	resp.Diagnostics = convert.AppendProtoDiag(resp.Diagnostics, convert.WarnsAndErrsToProto(warns, errs))
 
 	return resp, nil

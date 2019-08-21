@@ -106,6 +106,15 @@ func (p *GRPCProvider) getDatasourceSchema(name string) providers.Schema {
 	return dataSchema
 }
 
+func (p *GRPCProvider) getProvisionerSchema(name string) providers.Schema {
+	schema := p.getSchema()
+	provisionerSchema, ok := schema.Provisioners[name]
+	if !ok {
+		panic("unknown provisioner " + name)
+	}
+	return provisionerSchema
+}
+
 func (p *GRPCProvider) GetSchema() (resp providers.GetSchemaResponse) {
 	log.Printf("[TRACE] GRPCProvider: GetSchema")
 	p.mu.Lock()
@@ -117,6 +126,7 @@ func (p *GRPCProvider) GetSchema() (resp providers.GetSchemaResponse) {
 
 	resp.ResourceTypes = make(map[string]providers.Schema)
 	resp.DataSources = make(map[string]providers.Schema)
+	resp.Provisioners = make(map[string]providers.Schema)
 
 	// Some providers may generate quite large schemas, and the internal default
 	// grpc response size limit is 4MB. 64MB should cover most any use case, and
@@ -145,6 +155,10 @@ func (p *GRPCProvider) GetSchema() (resp providers.GetSchemaResponse) {
 
 	for name, data := range protoResp.DataSourceSchemas {
 		resp.DataSources[name] = convert.ProtoToProviderSchema(data)
+	}
+
+	for name, prov := range protoResp.ProvisionerSchemas {
+		resp.Provisioners[name] = convert.ProtoToProviderSchema(prov)
 	}
 
 	p.schemas = resp
@@ -230,6 +244,31 @@ func (p *GRPCProvider) ValidateDataSourceConfig(r providers.ValidateDataSourceCo
 	}
 
 	protoResp, err := p.client.ValidateDataSourceConfig(p.ctx, protoReq)
+	if err != nil {
+		resp.Diagnostics = resp.Diagnostics.Append(err)
+		return resp
+	}
+	resp.Diagnostics = resp.Diagnostics.Append(convert.ProtoToDiagnostics(protoResp.Diagnostics))
+	return resp
+}
+
+func (p *GRPCProvider) ValidateProvisionerConfig(r providers.ValidateProvisionerConfigRequest) (resp providers.ValidateProvisionerConfigResponse) {
+	log.Printf("[TRACE] GRPCProvider: ValidateProvisionerConfig")
+
+	provisionerSchema := p.getProvisionerSchema(r.TypeName)
+
+	mp, err := msgpack.Marshal(r.Config, provisionerSchema.Block.ImpliedType())
+	if err != nil {
+		resp.Diagnostics = resp.Diagnostics.Append(err)
+		return resp
+	}
+
+	protoReq := &proto.ValidateProvisionerConfig_Request{
+		TypeName: r.TypeName,
+		Config:   &proto.DynamicValue{Msgpack: mp},
+	}
+
+	protoResp, err := p.client.ValidateProvisionerConfig(p.ctx, protoReq)
 	if err != nil {
 		resp.Diagnostics = resp.Diagnostics.Append(err)
 		return resp
