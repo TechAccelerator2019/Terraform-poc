@@ -121,6 +121,7 @@ require (
 	golang.org/x/net v0.0.0-20190502183928-7f726cade0ab
 	golang.org/x/oauth2 v0.0.0-20190226205417-e64efc72b421
 	golang.org/x/sys v0.0.0-20190804053845-51ab0e2deafa
+	golang.org/x/tools v0.0.0-20190425150028-36563e24a262
 	google.golang.org/api v0.3.1
 	google.golang.org/grpc v1.19.1
 	gopkg.in/ini.v1 v1.42.0 // indirect
