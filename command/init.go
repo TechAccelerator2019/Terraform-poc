@@ -13,6 +13,7 @@ import (
 	"github.com/zclconf/go-cty/cty"
 
 	"github.com/hashicorp/errwrap"
+	"github.com/hashicorp/terraform/addrs"
 	"github.com/hashicorp/terraform/backend"
 	backendInit "github.com/hashicorp/terraform/backend/init"
 	"github.com/hashicorp/terraform/configs"
@@ -516,7 +517,8 @@ func (c *InitCommand) getProviders(earlyConfig *earlyconfig.Config, state *state
 		}
 
 		for provider, reqd := range missing {
-			_, providerDiags, err := c.providerInstaller.Get(provider, reqd.Versions)
+			pc := addrs.NewDefaultProviderConfig(provider)
+			_, providerDiags, err := c.providerInstaller.Get(pc, reqd.Versions)
 			diags = diags.Append(providerDiags)
 
 			if err != nil {

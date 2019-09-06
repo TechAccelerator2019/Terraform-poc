@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/errwrap"
 	getter "github.com/hashicorp/go-getter"
 	multierror "github.com/hashicorp/go-multierror"
+	"github.com/hashicorp/terraform/addrs"
 	"github.com/hashicorp/terraform/httpclient"
 	"github.com/hashicorp/terraform/registry"
 	"github.com/hashicorp/terraform/registry/regsrc"
@@ -49,7 +50,7 @@ func init() {
 // An Installer maintains a local cache of plugins by downloading plugins
 // from an online repository.
 type Installer interface {
-	Get(name string, req Constraints) (PluginMeta, tfdiags.Diagnostics, error)
+	Get(provider addrs.ProviderConfig, req Constraints) (PluginMeta, tfdiags.Diagnostics, error)
 	PurgeUnused(used map[string]PluginMeta) (removed PluginMetaSet, err error)
 }
 
@@ -106,7 +107,7 @@ type ProviderInstaller struct {
 // are produced under the assumption that if presented to the user they will
 // be presented alongside context about what is being installed, and thus the
 // error messages do not redundantly include such information.
-func (i *ProviderInstaller) Get(provider string, req Constraints) (PluginMeta, tfdiags.Diagnostics, error) {
+func (i *ProviderInstaller) Get(provider addrs.ProviderConfig, req Constraints) (PluginMeta, tfdiags.Diagnostics, error) {
 	var diags tfdiags.Diagnostics
 
 	// a little bit of initialization.
@@ -247,7 +248,7 @@ func (i *ProviderInstaller) Get(provider string, req Constraints) (PluginMeta, t
 	metas := FindPlugins("provider", []string{i.Dir})
 	log.Printf("[DEBUG] all plugins found %#v", metas)
 	metas, _ = metas.ValidateVersions()
-	metas = metas.WithName(provider).WithVersion(v)
+	metas = metas.WithName(provider.Type).WithVersion(v)
 	log.Printf("[DEBUG] filtered plugins %#v", metas)
 	if metas.Count() == 0 {
 		// This should never happen. Suggests that the release archive
@@ -275,10 +276,10 @@ func (i *ProviderInstaller) Get(provider string, req Constraints) (PluginMeta, t
 	return metas.Newest(), diags, nil
 }
 
-func (i *ProviderInstaller) install(provider string, version Version, url string) error {
+func (i *ProviderInstaller) install(provider addrs.ProviderConfig, version Version, url string) error {
 	if i.Cache != nil {
 		log.Printf("[DEBUG] looking for provider %s %s in plugin cache", provider, version)
-		cached := i.Cache.CachedPluginPath("provider", provider, version)
+		cached := i.Cache.CachedPluginPath("provider", provider.Type, version)
 		if cached == "" {
 			log.Printf("[DEBUG] %s %s not yet in cache, so downloading %s", provider, version, url)
 			err := getter.Get(i.Cache.InstallDir(), url)
@@ -286,7 +287,7 @@ func (i *ProviderInstaller) install(provider string, version Version, url string
 				return err
 			}
 			// should now be in cache
-			cached = i.Cache.CachedPluginPath("provider", provider, version)
+			cached = i.Cache.CachedPluginPath("provider", provider.Type, version)
 			if cached == "" {
 				// should never happen if the getter is behaving properly
 				// and the plugins are packaged properly.
@@ -471,9 +472,9 @@ func (i *ProviderInstaller) hostname() (string, error) {
 }
 
 // list all versions available for the named provider
-func (i *ProviderInstaller) listProviderVersions(name string) (*response.TerraformProviderVersions, error) {
-	provider := regsrc.NewTerraformProvider(name, i.OS, i.Arch)
-	versions, err := i.registry.TerraformProviderVersions(provider)
+func (i *ProviderInstaller) listProviderVersions(provider addrs.ProviderConfig) (*response.TerraformProviderVersions, error) {
+	req := regsrc.NewTerraformProvider(provider.Type, i.OS, i.Arch)
+	versions, err := i.registry.TerraformProviderVersions(req)
 	return versions, err
 }
 
